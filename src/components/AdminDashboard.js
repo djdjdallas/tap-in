@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState, useEffect } from "react";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import {
@@ -15,18 +17,15 @@ import {
   Link as LinkIcon,
   Facebook,
 } from "lucide-react";
-
-// Import UI components
 import { StatsCard } from "./StatsCard";
 import { LinkForm } from "./dashboard/LinkForm";
 import { SubtitleEditor } from "./dashboard/SubtitleEditor";
 import { ProfilePreview } from "./dashboard/ProfilePreview";
-import { LinksList } from "./dashboard/LinksList";
+import { SubtitleSection } from "./dashboard/SubtitleSection";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 
-// Social icons mapping
 export const socialIcons = {
   website: Globe,
   twitter: Twitter,
@@ -42,22 +41,24 @@ export const socialIcons = {
 export default function AdminDashboard({ user }) {
   const supabase = createClientComponentClient();
   const [links, setLinks] = useState([]);
-  const [subtitles, setSubtitles] = useState([{ id: 1, text: "SOCIALS:" }]);
+  const [subtitles, setSubtitles] = useState([]);
   const [editingLink, setEditingLink] = useState(null);
   const [isAddingLink, setIsAddingLink] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [currentSubtitleId, setCurrentSubtitleId] = useState(null);
 
   const [formData, setFormData] = useState({
     title: "",
     username: "",
     icon: "website",
     url: "",
+    order_index: 0,
+    subtitle_id: null,
   });
 
-  // Check authentication and fetch links
   useEffect(() => {
-    const checkAuthAndFetchLinks = async () => {
+    const checkAuthAndFetchData = async () => {
       try {
         const {
           data: { session },
@@ -68,23 +69,36 @@ export default function AdminDashboard({ user }) {
           throw new Error("Authentication error. Please sign in again.");
         }
 
-        await fetchLinks();
+        await Promise.all([fetchLinks(), fetchSubtitles()]);
 
         // Subscribe to realtime changes
-        const channel = supabase
+        const linksChannel = supabase
           .channel("links_changes")
           .on(
             "postgres_changes",
             { event: "*", schema: "public", table: "links" },
             (payload) => {
-              console.log("Change received!", payload);
+              console.log("Links change received!", payload);
               fetchLinks();
             }
           )
           .subscribe();
 
+        const subtitlesChannel = supabase
+          .channel("subtitles_changes")
+          .on(
+            "postgres_changes",
+            { event: "*", schema: "public", table: "subtitles" },
+            (payload) => {
+              console.log("Subtitles change received!", payload);
+              fetchSubtitles();
+            }
+          )
+          .subscribe();
+
         return () => {
-          supabase.removeChannel(channel);
+          supabase.removeChannel(linksChannel);
+          supabase.removeChannel(subtitlesChannel);
         };
       } catch (error) {
         console.error("Setup error:", error);
@@ -93,7 +107,7 @@ export default function AdminDashboard({ user }) {
       }
     };
 
-    checkAuthAndFetchLinks();
+    checkAuthAndFetchData();
   }, [user?.id]);
 
   const fetchLinks = async () => {
@@ -104,10 +118,12 @@ export default function AdminDashboard({ user }) {
         .from("links")
         .select("*")
         .eq("user_id", user.id)
+        .order("order_index", { ascending: true })
         .order("created_at", { ascending: true });
 
       if (error) throw error;
 
+      console.log("Fetched links:", data); // Debug log
       setLinks(data || []);
       setIsLoading(false);
       setError(null);
@@ -118,25 +134,51 @@ export default function AdminDashboard({ user }) {
     }
   };
 
-  const handleAddLink = () => {
+  const fetchSubtitles = async () => {
+    try {
+      if (!user?.id) return;
+
+      const { data, error } = await supabase
+        .from("subtitles")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("order_index", { ascending: true });
+
+      if (error) throw error;
+
+      console.log("Fetched subtitles:", data); // Debug log
+      setSubtitles(data || []);
+    } catch (error) {
+      console.error("Error fetching subtitles:", error);
+      toast.error("Failed to load sections");
+    }
+  };
+
+  const handleAddLink = (subtitleId) => {
     setIsAddingLink(true);
     setEditingLink(null);
+    setCurrentSubtitleId(subtitleId);
     setFormData({
       title: "",
       username: "",
       icon: "website",
       url: "",
+      subtitle_id: subtitleId,
+      order_index: links.filter((l) => l.subtitle_id === subtitleId).length,
     });
   };
 
   const handleEditLink = (link) => {
     setEditingLink(link.id);
     setIsAddingLink(false);
+    setCurrentSubtitleId(link.subtitle_id);
     setFormData({
       title: link.title,
-      username: link.username,
-      icon: link.icon,
+      username: link.username || "",
+      icon: link.icon || "website",
       url: link.url,
+      subtitle_id: link.subtitle_id,
+      order_index: link.order_index,
     });
   };
 
@@ -149,7 +191,24 @@ export default function AdminDashboard({ user }) {
 
       if (error) throw error;
 
-      setLinks(links.filter((link) => link.id !== linkId));
+      // Reorder remaining links
+      const remainingLinks = links.filter(
+        (link) => link.id !== linkId && link.subtitle_id === currentSubtitleId
+      );
+      const updates = remainingLinks.map((link, index) => ({
+        id: link.id,
+        order_index: index,
+      }));
+
+      if (updates.length > 0) {
+        const { error: updateError } = await supabase
+          .from("links")
+          .upsert(updates);
+
+        if (updateError) throw updateError;
+      }
+
+      await fetchLinks();
       toast.success("Link deleted successfully");
     } catch (error) {
       console.error("Error deleting link:", error);
@@ -167,30 +226,30 @@ export default function AdminDashboard({ user }) {
         throw new Error("Please sign in to manage links");
       }
 
+      if (!formData.subtitle_id) {
+        throw new Error("Please select a section for this link");
+      }
+
+      const linkData = {
+        title: formData.title,
+        username: formData.username || null,
+        icon: formData.icon || "website",
+        url: formData.url,
+        user_id: user.id,
+        subtitle_id: formData.subtitle_id,
+        order_index: formData.order_index,
+      };
+
       if (editingLink) {
         const { error } = await supabase
           .from("links")
-          .update({
-            title: formData.title,
-            username: formData.username,
-            icon: formData.icon,
-            url: formData.url,
-            updated_at: new Date().toISOString(),
-          })
+          .update(linkData)
           .match({ id: editingLink, user_id: user.id });
 
         if (error) throw error;
         toast.success("Link updated successfully");
       } else {
-        const { error } = await supabase.from("links").insert([
-          {
-            title: formData.title,
-            username: formData.username,
-            icon: formData.icon,
-            url: formData.url,
-            user_id: user.id,
-          },
-        ]);
+        const { error } = await supabase.from("links").insert([linkData]);
 
         if (error) throw error;
         toast.success("Link added successfully");
@@ -204,6 +263,8 @@ export default function AdminDashboard({ user }) {
         username: "",
         icon: "website",
         url: "",
+        order_index: 0,
+        subtitle_id: null,
       });
     } catch (error) {
       console.error("Error saving link:", error);
@@ -215,11 +276,14 @@ export default function AdminDashboard({ user }) {
   const handleCancelEdit = () => {
     setEditingLink(null);
     setIsAddingLink(false);
+    setCurrentSubtitleId(null);
     setFormData({
       title: "",
       username: "",
       icon: "website",
       url: "",
+      order_index: 0,
+      subtitle_id: null,
     });
   };
 
@@ -247,7 +311,6 @@ export default function AdminDashboard({ user }) {
 
   return (
     <div className="max-w-6xl mx-auto p-8 space-y-8">
-      {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <StatsCard
           title="Total Views"
@@ -270,12 +333,11 @@ export default function AdminDashboard({ user }) {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Links Manager */}
         <div className="lg:col-span-8">
           <Card>
             <div className="space-y-6 p-6">
-              {/* Subtitle Editor */}
               <SubtitleEditor
+                user={user}
                 subtitles={subtitles}
                 setSubtitles={setSubtitles}
               />
@@ -286,43 +348,39 @@ export default function AdminDashboard({ user }) {
                 </div>
               )}
 
-              {/* Add New Link Button */}
-              {!isAddingLink && !editingLink && (
-                <Button
-                  onClick={handleAddLink}
-                  variant="outline"
-                  className="w-full flex items-center justify-center gap-2"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add New Link
-                </Button>
-              )}
+              <div className="space-y-8">
+                {subtitles.map((subtitle) => (
+                  <SubtitleSection
+                    key={subtitle.id}
+                    subtitle={subtitle}
+                    links={links}
+                    onAddLink={handleAddLink}
+                    onEditLink={handleEditLink}
+                    onDeleteLink={handleDeleteLink}
+                    getLinkIcon={getLinkIcon}
+                  />
+                ))}
+              </div>
 
-              {/* Link Form */}
               {(isAddingLink || editingLink) && (
                 <LinkForm
+                  user={user}
+                  onSuccess={() => {
+                    fetchLinks();
+                    setEditingLink(null);
+                    setIsAddingLink(false);
+                  }}
+                  editingLinkId={editingLink}
                   formData={formData}
                   setFormData={setFormData}
                   handleSubmit={handleSubmitLink}
                   handleCancel={handleCancelEdit}
-                  editingLink={editingLink}
-                />
-              )}
-
-              {/* Links List */}
-              {!isAddingLink && !editingLink && links.length > 0 && (
-                <LinksList
-                  links={links}
-                  onEdit={handleEditLink}
-                  onDelete={handleDeleteLink}
-                  getLinkIcon={getLinkIcon}
                 />
               )}
             </div>
           </Card>
         </div>
 
-        {/* Profile Preview */}
         <div className="lg:col-span-4">
           <ProfilePreview
             user={user}
