@@ -4,8 +4,8 @@ import "@/app/globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata = {
-  title: "Your LinkTree",
-  description: "Connect with me across platforms",
+  title: "tap-in.io | Connect Everywhere",
+  description: "Your unified online presence in one place",
 };
 
 export default function RootLayout({ children }) {

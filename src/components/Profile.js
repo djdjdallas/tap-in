@@ -17,8 +17,8 @@ export default function Profile() {
 
       {/* Name and Title */}
       <div className="space-y-2">
-        <h1 className="text-3xl font-bold text-gray-800">Your Name</h1>
-        <p className="text-gray-600">Digital Creator & Developer</p>
+        <h1 className="text-3xl font-bold text-gray-800">Dominick</h1>
+        <p className="text-gray-600">Digital Creator | App Developer</p>
       </div>
 
       {/* Status Pills */}

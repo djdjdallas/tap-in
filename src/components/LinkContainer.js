@@ -24,13 +24,13 @@ export default function LinkContainer() {
         },
         {
           title: "Instagram",
-          url: "https://instagram.com/yourusername",
+          url: "https://instagram.com/dominickjerell",
           icon: <Instagram className="w-5 h-5" />,
           color: "hover:text-pink-500",
         },
         {
           title: "LinkedIn",
-          url: "https://linkedin.com/in/yourusername",
+          url: "https://linkedin.com/in/dominickhill",
           icon: <Linkedin className="w-5 h-5" />,
           color: "hover:text-blue-600",
         },
@@ -41,7 +41,7 @@ export default function LinkContainer() {
       items: [
         {
           title: "GitHub",
-          url: "https://github.com/yourusername",
+          url: "https://github.com/djdjdallas",
           icon: <Github className="w-5 h-5" />,
           color: "hover:text-gray-800 dark:hover:text-white",
         },
@@ -59,8 +59,8 @@ export default function LinkContainer() {
         {
           title: "Taste with out Borders",
           url: "https://github.com/yourusername",
-          icon: <Github className="w-5 h-5" />,
-          color: "hover:text-gray-800 dark:hover:text-white",
+          icon: <Globe className="w-5 h-5" />,
+          color: "hover:text-green-500",
         },
         {
           title: "Commons",
