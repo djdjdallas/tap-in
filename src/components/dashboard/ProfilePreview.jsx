@@ -2,21 +2,28 @@ import { useState, useEffect } from "react";
 import { Briefcase, Map, Edit2, X, Check, Upload } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { toast } from "sonner";
+
+// Define constants for better maintainability
+const DEFAULT_AVATAR =
+  "https://fgcfzzrmfavqcwslqilf.supabase.co/storage/v1/object/public/avatars/default-avatar.png";
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB in bytes
 
 export const ProfilePreview = ({ user, subtitles, links, getLinkIcon }) => {
   const supabase = createClientComponentClient();
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [profileData, setProfileData] = useState({
     name: "",
     title: "Digital Creator | App Developer",
     location: "Los Angeles, CA",
     availability: true,
     bio: "",
-    avatar_url: "/api/placeholder/96/96",
+    avatar_url: DEFAULT_AVATAR,
   });
-  const [loading, setLoading] = useState(true);
 
+  // Fetch profile data on component mount
   useEffect(() => {
     if (user?.id) {
       fetchProfile();
@@ -25,33 +32,27 @@ export const ProfilePreview = ({ user, subtitles, links, getLinkIcon }) => {
 
   const fetchProfile = async () => {
     if (!user?.id) {
-      console.log("No user ID available");
-      setLoading(false);
+      setIsLoading(false);
       return;
     }
 
     try {
-      console.log("Fetching profile for user:", user.id);
-
       let { data: profile, error: fetchError } = await supabase
         .from("profiles")
         .select("*")
         .eq("id", user.id)
         .single();
 
-      console.log("Initial fetch result:", { profile, fetchError });
-
       if (fetchError && fetchError.code === "PGRST116") {
-        console.log("Profile not found, creating new profile...");
-
+        // Profile doesn't exist, create a new one
         const defaultProfile = {
           id: user.id,
-          name: user?.name || "Amare",
+          name: user?.name || "New User",
           title: "Digital Creator | App Developer",
           location: "Los Angeles, CA",
           availability: true,
           bio: "",
-          avatar_url: "/api/placeholder/96/96",
+          avatar_url: DEFAULT_AVATAR,
         };
 
         const { data: newProfile, error: createError } = await supabase
@@ -60,41 +61,29 @@ export const ProfilePreview = ({ user, subtitles, links, getLinkIcon }) => {
           .select()
           .single();
 
-        if (createError) {
-          console.error("Profile creation error:", {
-            code: createError.code,
-            message: createError.message,
-            details: createError.details,
-            hint: createError.hint,
-          });
-          throw createError;
-        }
-
-        console.log("New profile created:", newProfile);
+        if (createError) throw createError;
         profile = newProfile;
       } else if (fetchError) {
         throw fetchError;
       }
 
+      // Update state with profile data
       if (profile) {
         setProfileData({
-          name: profile.name || user?.name || "Amare",
+          name: profile.name || user?.name || "New User",
           title: profile.title || "Digital Creator | App Developer",
           location: profile.location || "Los Angeles, CA",
           availability: profile.availability ?? true,
           bio: profile.bio || "",
-          avatar_url: profile.avatar_url || "/api/placeholder/96/96",
+          avatar_url: profile.avatar_url || DEFAULT_AVATAR,
         });
       }
     } catch (error) {
-      console.error("Profile operation failed:", {
-        name: error.name,
-        message: error.message,
-        stack: error.stack,
-      });
+      console.error("Profile fetch failed:", error);
       setError("Failed to load profile. Please refresh the page.");
+      toast.error("Failed to load profile");
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
@@ -106,75 +95,29 @@ export const ProfilePreview = ({ user, subtitles, links, getLinkIcon }) => {
 
     try {
       setError(null);
-      // First, check if profile exists
-      const { data: existingProfile, error: checkError } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .single();
-
-      if (checkError && checkError.code !== "PGRST116") {
-        console.error("Error checking profile:", checkError);
-        throw checkError;
-      }
-
       const updates = {
         id: user.id,
-        name: profileData.name || "",
-        title: profileData.title || "",
-        location: profileData.location || "",
-        availability: profileData.availability || false,
-        bio: profileData.bio || "",
-        avatar_url: profileData.avatar_url || "",
+        name: profileData.name,
+        title: profileData.title,
+        location: profileData.location,
+        availability: profileData.availability,
+        bio: profileData.bio,
+        avatar_url: profileData.avatar_url,
+        updated_at: new Date().toISOString(),
       };
 
-      console.log("Profile update attempt:", {
-        exists: !!existingProfile,
-        updates,
-      });
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .upsert(updates);
 
-      let result;
-      if (!existingProfile) {
-        // Insert new profile
-        result = await supabase
-          .from("profiles")
-          .insert([{ ...updates, created_at: new Date().toISOString() }])
-          .select()
-          .single();
-      } else {
-        // Update existing profile
-        result = await supabase
-          .from("profiles")
-          .update({ ...updates, updated_at: new Date().toISOString() })
-          .eq("id", user.id)
-          .select()
-          .single();
-      }
+      if (updateError) throw updateError;
 
-      if (result.error) {
-        console.error("Database operation failed:", {
-          error: result.error,
-          status: result.status,
-          statusText: result.statusText,
-        });
-        throw result.error;
-      }
-
-      console.log("Profile saved successfully:", result.data);
       setIsEditing(false);
-
-      // Refresh profile data
-      await fetchProfile();
+      toast.success("Profile saved successfully");
     } catch (error) {
-      console.error("Save operation failed:", {
-        code: error?.code,
-        message: error?.message,
-        details: error?.details,
-        hint: error?.hint,
-      });
-      setError(
-        error?.message || "Failed to save profile changes. Please try again."
-      );
+      console.error("Profile save failed:", error);
+      setError("Failed to save profile changes. Please try again.");
+      toast.error("Failed to save profile");
     }
   };
 
@@ -184,34 +127,77 @@ export const ProfilePreview = ({ user, subtitles, links, getLinkIcon }) => {
       const file = e.target.files?.[0];
       if (!file) return;
 
-      const fileExt = file.name.split(".").pop();
-      const fileName = `${Date.now()}-${Math.random()}.${fileExt}`;
-      const filePath = `${user.id}/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from("avatars")
-        .upload(filePath, file);
-
-      if (uploadError) {
-        console.error("Error uploading image:", uploadError);
-        throw uploadError;
+      // Validate file type and size
+      if (!file.type.startsWith("image/")) {
+        throw new Error("Please upload an image file");
       }
 
+      if (file.size > MAX_FILE_SIZE) {
+        throw new Error("File size must be less than 5MB");
+      }
+
+      setIsLoading(true);
+
+      // Create unique filename
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2)}.${fileExt}`;
+      const filePath = `${user.id}/${fileName}`;
+
+      // Delete old avatar if it exists and isn't the default
+      if (
+        profileData.avatar_url &&
+        !profileData.avatar_url.includes("default-avatar")
+      ) {
+        const oldPath = profileData.avatar_url.split("/avatars/")[1];
+        if (oldPath) {
+          await supabase.storage.from("avatars").remove([oldPath]);
+        }
+      }
+
+      // Upload new avatar
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(filePath, file, {
+          cacheControl: "3600",
+          upsert: false,
+          contentType: file.type,
+        });
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
       const {
         data: { publicUrl },
       } = supabase.storage.from("avatars").getPublicUrl(filePath);
 
-      setProfileData({ ...profileData, avatar_url: publicUrl });
-      await handleSave(); // Save the profile with new avatar URL
+      // Update profile with new avatar URL
+      setProfileData((prev) => ({ ...prev, avatar_url: publicUrl }));
+
+      // Save profile changes
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({ avatar_url: publicUrl })
+        .eq("id", user.id);
+
+      if (updateError) throw updateError;
+
+      toast.success("Profile image updated successfully");
     } catch (error) {
       console.error("Image upload failed:", error);
-      setError("Failed to upload image. Please try again.");
+      setError(error.message || "Failed to upload image. Please try again.");
+      toast.error(error.message || "Failed to upload image");
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
-      <div className="flex items-center justify-center p-8">Loading...</div>
+      <div className="flex items-center justify-center p-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
+      </div>
     );
   }
 
@@ -246,6 +232,7 @@ export const ProfilePreview = ({ user, subtitles, links, getLinkIcon }) => {
           </div>
         )}
       </CardHeader>
+
       <CardContent>
         {error && (
           <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-md flex items-center justify-between">
@@ -258,15 +245,21 @@ export const ProfilePreview = ({ user, subtitles, links, getLinkIcon }) => {
             </button>
           </div>
         )}
+
         <div className="scale-90 transform origin-top">
           <div className="text-center space-y-4">
+            {/* Profile Image */}
             <div className="relative w-24 h-24 mx-auto group">
-              <div className="absolute inset-0 bg-gradient-to-r from-pink-500 via-purple-500 to-blue-500 rounded-full"></div>
+              <div className="absolute inset-0 bg-gradient-to-r from-pink-500 via-purple-500 to-blue-500 rounded-full" />
               <div className="absolute inset-[2px] bg-white rounded-full p-1">
                 <img
                   src={profileData.avatar_url}
-                  alt="Profile"
+                  alt={`${profileData.name}'s profile`}
                   className="w-full h-full object-cover rounded-full"
+                  onError={(e) => {
+                    console.warn("Image failed to load, using default avatar");
+                    e.target.src = DEFAULT_AVATAR;
+                  }}
                 />
                 {isEditing && (
                   <label className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-full cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity">
@@ -276,12 +269,14 @@ export const ProfilePreview = ({ user, subtitles, links, getLinkIcon }) => {
                       className="hidden"
                       accept="image/*"
                       onChange={handleImageUpload}
+                      disabled={isLoading}
                     />
                   </label>
                 )}
               </div>
             </div>
 
+            {/* Profile Info */}
             <div>
               {isEditing ? (
                 <input
@@ -311,6 +306,7 @@ export const ProfilePreview = ({ user, subtitles, links, getLinkIcon }) => {
               )}
             </div>
 
+            {/* Location and Availability */}
             <div className="flex justify-center gap-2 text-sm">
               <span className="flex items-center gap-1">
                 <Map className="w-4 h-4" />
@@ -357,22 +353,25 @@ export const ProfilePreview = ({ user, subtitles, links, getLinkIcon }) => {
               )}
             </div>
 
+            {/* Links Sections */}
             {subtitles.map((subtitle) => (
               <div key={subtitle.id} className="mt-4">
                 <h3 className="text-lg font-medium mb-2">{subtitle.text}</h3>
                 <div className="space-y-2">
-                  {links.map((link) => (
-                    <a
-                      key={link.id}
-                      href={link.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 justify-center text-gray-600 hover:text-gray-900"
-                    >
-                      {getLinkIcon(link.icon)}
-                      <span>{link.username}</span>
-                    </a>
-                  ))}
+                  {links
+                    .filter((link) => link.subtitle_id === subtitle.id)
+                    .map((link) => (
+                      <a
+                        key={link.id}
+                        href={link.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 justify-center text-gray-600 hover:text-gray-900"
+                      >
+                        {getLinkIcon(link.icon)}
+                        <span>{link.username || link.title}</span>
+                      </a>
+                    ))}
                 </div>
               </div>
             ))}

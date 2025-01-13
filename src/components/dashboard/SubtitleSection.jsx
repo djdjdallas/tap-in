@@ -13,16 +13,14 @@ export const SubtitleSection = ({
   onDeleteLink,
   getLinkIcon,
 }) => {
+  if (!subtitle || !subtitle.id) {
+    return null;
+  }
+
   // Filter links that belong to this subtitle
   const sectionLinks = links.filter(
     (link) => Number(link.subtitle_id) === Number(subtitle.id)
   );
-
-  console.log("Subtitle:", subtitle.id, "Section Links:", {
-    subtitleId: subtitle.id,
-    allLinks: links,
-    filteredLinks: sectionLinks,
-  }); // Debug log
 
   return (
     <Card className="w-full">
@@ -32,19 +30,17 @@ export const SubtitleSection = ({
         </div>
 
         <div className="space-y-4">
-          {sectionLinks.length > 0 ? (
+          {/* Show links if they exist */}
+          {sectionLinks.length > 0 && (
             <LinksList
               links={sectionLinks}
               onEdit={onEditLink}
               onDelete={onDeleteLink}
               getLinkIcon={getLinkIcon}
             />
-          ) : (
-            <div className="text-sm text-gray-500 italic text-center py-4">
-              No links added yet
-            </div>
           )}
 
+          {/* Always show the Add Link button */}
           <Button
             onClick={() => onAddLink(subtitle.id)}
             variant="outline"

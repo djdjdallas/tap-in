@@ -8,82 +8,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-export const SubtitleEditor = ({ user }) => {
+export const SubtitleEditor = ({ user, subtitles, setSubtitles }) => {
   const supabase = createClientComponentClient();
   const [isEditing, setIsEditing] = useState(null);
   const [newSubtitle, setNewSubtitle] = useState("");
   const [isAddingNew, setIsAddingNew] = useState(false);
-  const [subtitles, setSubtitles] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (!user?.id) {
-      console.log("No user ID available");
       setIsLoading(false);
       return;
     }
-
-    console.log("Fetching subtitles for user:", user.id);
-    fetchSubtitles();
-
-    // Set up realtime subscription
-    const channel = supabase
-      .channel("subtitles_changes")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "subtitles",
-          filter: `user_id=eq.${user.id}`,
-        },
-        (payload) => {
-          console.log("Realtime change received:", payload);
-          fetchSubtitles();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      console.log("Cleaning up subscription");
-      supabase.removeChannel(channel);
-    };
+    setIsLoading(false);
   }, [user?.id]);
-
-  const fetchSubtitles = async () => {
-    console.log("Starting fetchSubtitles");
-
-    try {
-      console.log("Querying subtitles for user_id:", user.id);
-
-      const { data, error } = await supabase
-        .from("subtitles")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: true });
-
-      console.log("Supabase response:", { data, error });
-
-      if (error) {
-        console.error("Supabase error details:", {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code,
-        });
-        toast.error(`Failed to load subtitles: ${error.message}`);
-        throw error;
-      }
-
-      setSubtitles(data || []);
-      console.log("Subtitles updated successfully:", data);
-    } catch (error) {
-      console.error("Error in fetchSubtitles:", error);
-      toast.error("Failed to load subtitles. Please try again later.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleAddSubtitle = async () => {
     if (!newSubtitle.trim()) return;
@@ -99,71 +37,61 @@ export const SubtitleEditor = ({ user }) => {
         ])
         .select();
 
-      if (error) {
-        console.error("Error adding subtitle:", error);
-        toast.error("Failed to add subtitle");
-        throw error;
-      }
+      if (error) throw error;
 
-      console.log("Added subtitle:", data);
-      setSubtitles([...subtitles, ...data]);
+      setSubtitles((prev) => [...prev, ...data]);
       setNewSubtitle("");
       setIsAddingNew(false);
-      toast.success("Subtitle added successfully");
+      toast.success("Section added successfully");
     } catch (error) {
-      console.error("Error in handleAddSubtitle:", error);
-      toast.error("Failed to add subtitle. Please try again.");
+      console.error("Error adding section:", error);
+      toast.error("Failed to add section");
     }
   };
 
   const handleUpdateSubtitle = async (id, newText) => {
     try {
-      console.log("Updating subtitle:", { id, newText });
       const { error } = await supabase
         .from("subtitles")
         .update({ text: newText })
-        .eq("id", id)
-        .eq("user_id", user.id);
+        .match({ id: id, user_id: user.id });
 
-      if (error) {
-        console.error("Error updating subtitle:", error);
-        toast.error("Failed to update subtitle");
-        throw error;
-      }
+      if (error) throw error;
 
-      setSubtitles(
-        subtitles.map((sub) =>
-          sub.id === id ? { ...sub, text: newText } : sub
-        )
+      setSubtitles((prev) =>
+        prev.map((sub) => (sub.id === id ? { ...sub, text: newText } : sub))
       );
       setIsEditing(null);
-      toast.success("Subtitle updated successfully");
+      toast.success("Section updated successfully");
     } catch (error) {
-      console.error("Error in handleUpdateSubtitle:", error);
-      toast.error("Failed to update subtitle. Please try again.");
+      console.error("Error updating section:", error);
+      toast.error("Failed to update section");
     }
   };
 
   const handleDeleteSubtitle = async (id) => {
     try {
-      console.log("Deleting subtitle:", id);
-      const { error } = await supabase
+      // Delete all associated links first
+      const { error: linksError } = await supabase
+        .from("links")
+        .delete()
+        .match({ subtitle_id: id });
+
+      if (linksError) throw linksError;
+
+      // Then delete the subtitle
+      const { error: subtitleError } = await supabase
         .from("subtitles")
         .delete()
-        .eq("id", id)
-        .eq("user_id", user.id);
+        .match({ id: id, user_id: user.id });
 
-      if (error) {
-        console.error("Error deleting subtitle:", error);
-        toast.error("Failed to delete subtitle");
-        throw error;
-      }
+      if (subtitleError) throw subtitleError;
 
-      setSubtitles(subtitles.filter((sub) => sub.id !== id));
-      toast.success("Subtitle deleted successfully");
+      setSubtitles((prev) => prev.filter((sub) => sub.id !== id));
+      toast.success("Section and associated links deleted successfully");
     } catch (error) {
-      console.error("Error in handleDeleteSubtitle:", error);
-      toast.error("Failed to delete subtitle. Please try again.");
+      console.error("Error deleting section:", error);
+      toast.error("Failed to delete section");
     }
   };
 
@@ -186,8 +114,8 @@ export const SubtitleEditor = ({ user }) => {
                   value={subtitle.text}
                   onChange={(e) => {
                     const newText = e.target.value;
-                    setSubtitles(
-                      subtitles.map((sub) =>
+                    setSubtitles((prev) =>
+                      prev.map((sub) =>
                         sub.id === subtitle.id ? { ...sub, text: newText } : sub
                       )
                     );
@@ -217,7 +145,15 @@ export const SubtitleEditor = ({ user }) => {
                   <Edit2 className="w-4 h-4" />
                 </Button>
                 <Button
-                  onClick={() => handleDeleteSubtitle(subtitle.id)}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        "Are you sure? This will delete all links in this section."
+                      )
+                    ) {
+                      handleDeleteSubtitle(subtitle.id);
+                    }
+                  }}
                   variant="ghost"
                   size="icon"
                   className="text-red-500 hover:text-red-700"
