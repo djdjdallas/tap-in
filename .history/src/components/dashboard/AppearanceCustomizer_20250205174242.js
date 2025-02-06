@@ -214,33 +214,22 @@ export function AppearanceCustomizer({ user, initialProfile }) {
       if (!file) return;
 
       if (!file.type.startsWith("image/")) {
-        throw new Error("Please upload an image file");
+        toast.error("Please upload an image file");
+        return;
       }
 
       const maxSize = 5 * 1024 * 1024; // 5MB
       if (file.size > maxSize) {
-        throw new Error("File size must be less than 5MB");
+        toast.error("Image must be less than 5MB");
+        return;
       }
 
       setIsUpdating(true);
 
-      // Delete old background if exists
-      if (backgroundImage) {
-        try {
-          const oldPath = backgroundImage.split("/backgrounds/")[1];
-          if (oldPath) {
-            await supabase.storage.from("backgrounds").remove([oldPath]);
-          }
-        } catch (error) {
-          console.warn("Error deleting old background:", error);
-        }
-      }
-
-      // Upload new image
+      // Upload to Storage
       const fileExt = file.name.split(".").pop();
       const fileName = `${user.id}/background-${Date.now()}.${fileExt}`;
-
-      const { error: uploadError } = await supabase.storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
         .from("backgrounds")
         .upload(fileName, file);
 
@@ -251,26 +240,28 @@ export function AppearanceCustomizer({ user, initialProfile }) {
         .from("backgrounds")
         .getPublicUrl(fileName);
 
-      const newBackgroundUrl = urlData?.publicUrl;
-      if (!newBackgroundUrl) throw new Error("Failed to get public URL");
+      if (!urlData?.publicUrl) throw new Error("Failed to get public URL");
 
-      // Update profile with new URL
+      // Update profile
       const { error: updateError } = await supabase
         .from("profiles")
-        .update({ background_image: newBackgroundUrl })
+        .update({
+          background_image: urlData.publicUrl,
+        })
         .eq("id", user.id);
 
       if (updateError) throw updateError;
 
-      setBackgroundImage(newBackgroundUrl);
+      setBackgroundImage(urlData.publicUrl);
       toast.success("Background image updated successfully");
     } catch (error) {
-      console.error("Image upload failed:", error);
-      toast.error(error.message || "Failed to upload image");
+      console.error("Error uploading image:", error);
+      toast.error("Failed to upload image");
     } finally {
       setIsUpdating(false);
     }
   };
+
   const handleRemoveImage = async () => {
     try {
       setIsUpdating(true);

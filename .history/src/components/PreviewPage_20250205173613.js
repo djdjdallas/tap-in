@@ -73,7 +73,7 @@ const LinkCard = ({ link, getLinkIcon, profileData }) => {
       href={link.url}
       target="_blank"
       rel="noopener noreferrer"
-      className={`block p-3 ${profileData.button_bg_color} rounded-lg transition-shadow hover:shadow-md relative`}
+      className={`block p-3 ${profileData.button_bg_color} rounded-lg transition-shadow hover:shadow-md`}
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -107,7 +107,6 @@ export default function PreviewPage({ userId }) {
   const [links, setLinks] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [avatarUrl, setAvatarUrl] = useState(PLACEHOLDER_IMAGE);
-  const [backgroundImageUrl, setBackgroundImageUrl] = useState(null);
 
   // Get custom appearance settings with fallbacks
   const profileData = {
@@ -131,18 +130,18 @@ export default function PreviewPage({ userId }) {
       ) || "text-gray-600",
   };
 
-  const getSignedUrl = async (bucket, filePath) => {
+  const getSignedUrl = async (filePath) => {
     try {
       if (!filePath) return null;
-      const pathParts = filePath.split(`${bucket}/`);
+      const pathParts = filePath.split("avatars/");
       const relativePath = pathParts[pathParts.length - 1];
       const { data, error } = await supabase.storage
-        .from(bucket)
+        .from("avatars")
         .createSignedUrl(relativePath, 3600);
       if (error) throw error;
       return data.signedUrl;
     } catch (error) {
-      console.error(`Error getting signed URL from ${bucket}:`, error);
+      console.error("Error getting signed URL:", error);
       return null;
     }
   };
@@ -157,6 +156,7 @@ export default function PreviewPage({ userId }) {
   useEffect(() => {
     if (!userId) return;
 
+    // Set up real-time subscription for profile changes
     const channel = supabase
       .channel("profile_changes")
       .on(
@@ -167,20 +167,11 @@ export default function PreviewPage({ userId }) {
           table: "profiles",
           filter: `id=eq.${userId}`,
         },
-        async (payload) => {
+        (payload) => {
           console.log("Profile updated:", payload);
+          // Update local state when profile changes
           if (payload.new) {
             setProfile(payload.new);
-            // Update background image URL if it changes
-            if (payload.new.background_image) {
-              const signedUrl = await getSignedUrl(
-                "backgrounds",
-                payload.new.background_image
-              );
-              setBackgroundImageUrl(signedUrl);
-            } else {
-              setBackgroundImageUrl(null);
-            }
           }
         }
       )
@@ -196,22 +187,9 @@ export default function PreviewPage({ userId }) {
 
         if (profileError) throw profileError;
 
-        // Handle avatar URL
         if (profileData?.avatar_url) {
-          const signedUrl = await getSignedUrl(
-            "avatars",
-            profileData.avatar_url
-          );
+          const signedUrl = await getSignedUrl(profileData.avatar_url);
           setAvatarUrl(signedUrl || PLACEHOLDER_IMAGE);
-        }
-
-        // Handle background image URL
-        if (profileData?.background_image) {
-          const signedUrl = await getSignedUrl(
-            "backgrounds",
-            profileData.background_image
-          );
-          setBackgroundImageUrl(signedUrl);
         }
 
         const { data: subtitlesData, error: subtitlesError } = await supabase
@@ -242,6 +220,7 @@ export default function PreviewPage({ userId }) {
 
     fetchData();
 
+    // Cleanup subscription
     return () => {
       supabase.removeChannel(channel);
     };
@@ -275,105 +254,74 @@ export default function PreviewPage({ userId }) {
       {/* Profile Content */}
       <div className="max-w-2xl mx-auto p-8">
         <div
-          className={`space-y-8 ${
-            backgroundImageUrl ? "" : profileData.profile_bg_color
-          } border rounded-2xl shadow-sm p-8 relative overflow-hidden`}
-          style={{
-            backgroundImage: backgroundImageUrl
-              ? `url(${backgroundImageUrl})`
-              : "none",
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-          }}
+          className={`space-y-8 ${profileData.profile_bg_color} border rounded-2xl shadow-sm p-8`}
         >
-          {/* Background overlay for better text readability when using image */}
-          {backgroundImageUrl && (
-            <div className="absolute inset-0 bg-black bg-opacity-40" />
-          )}
-
-          {/* Content wrapper to keep everything above the overlay */}
-          <div className="relative z-10">
-            {/* Profile Image */}
-            <div className="relative w-32 h-32 mx-auto">
-              <div className="absolute inset-0 bg-gradient-to-r from-pink-500 via-purple-500 to-blue-500 rounded-full" />
-              <div className="absolute inset-[3px] bg-white rounded-full overflow-hidden">
-                <img
-                  src={avatarUrl}
-                  alt={`${profile?.name || "User"}'s profile`}
-                  className="w-full h-full object-cover"
-                  onError={() => setAvatarUrl(PLACEHOLDER_IMAGE)}
-                />
-              </div>
+          {/* Profile Image */}
+          <div className="relative w-32 h-32 mx-auto">
+            <div className="absolute inset-0 bg-gradient-to-r from-pink-500 via-purple-500 to-blue-500 rounded-full" />
+            <div className="absolute inset-[3px] bg-white rounded-full overflow-hidden">
+              <img
+                src={avatarUrl}
+                alt={`${profile?.name || "User"}'s profile`}
+                className="w-full h-full object-cover"
+                onError={() => setAvatarUrl(PLACEHOLDER_IMAGE)}
+              />
             </div>
+          </div>
 
-            {/* Profile Info */}
-            <div className="text-center space-y-4">
-              <h1
-                className={`text-3xl font-bold ${
-                  backgroundImageUrl
-                    ? "text-white"
-                    : profileData.profile_text_color
-                }`}
-              >
-                {profile?.name || "New User"}
-              </h1>
-              <p
-                className={
-                  backgroundImageUrl
-                    ? "text-white"
-                    : profileData.profile_text_color
-                }
-              >
-                {profile?.title || "Digital Creator"}
-              </p>
+          {/* Profile Info */}
+          <div className="text-center space-y-4">
+            <h1
+              className={`text-3xl font-bold ${profileData.profile_text_color}`}
+            >
+              {profile?.name || "New User"}
+            </h1>
+            <p className={profileData.profile_text_color}>
+              {profile?.title || "Digital Creator"}
+            </p>
 
-              {/* Location and Availability */}
-              <div className="flex justify-center gap-3">
-                {profile?.location && (
-                  <span
-                    className={`px-4 py-1.5 ${profileData.button_bg_color} shadow-sm rounded-full text-sm ${profileData.button_text_color}`}
-                  >
-                    📍 {profile.location}
-                  </span>
-                )}
-                {profile?.availability && (
-                  <span
-                    className={`px-4 py-1.5 ${profileData.button_bg_color} shadow-sm rounded-full text-sm ${profileData.button_text_color}`}
-                  >
-                    💼 Available for work
-                  </span>
-                )}
-              </div>
+            {/* Location and Availability */}
+            <div className="flex justify-center gap-3">
+              {profile?.location && (
+                <span
+                  className={`px-4 py-1.5 ${profileData.button_bg_color} shadow-sm rounded-full text-sm ${profileData.button_text_color}`}
+                >
+                  📍 {profile.location}
+                </span>
+              )}
+              {profile?.availability && (
+                <span
+                  className={`px-4 py-1.5 ${profileData.button_bg_color} shadow-sm rounded-full text-sm ${profileData.button_text_color}`}
+                >
+                  💼 Available for work
+                </span>
+              )}
             </div>
+          </div>
 
-            {/* Links Section */}
-            <div className="space-y-6">
-              {subtitles?.map((subtitle) => (
-                <div key={subtitle.id} className="space-y-4">
-                  <h3
-                    className={`text-lg font-medium text-center ${
-                      backgroundImageUrl
-                        ? "text-white"
-                        : profileData.profile_text_color
-                    }`}
-                  >
-                    {subtitle.text}
-                  </h3>
-                  <div className="space-y-3">
-                    {links
-                      ?.filter((link) => link.subtitle_id === subtitle.id)
-                      .map((link) => (
-                        <LinkCard
-                          key={link.id}
-                          link={link}
-                          getLinkIcon={getLinkIcon}
-                          profileData={profileData}
-                        />
-                      ))}
-                  </div>
+          {/* Links Section */}
+          <div className="space-y-6">
+            {subtitles?.map((subtitle) => (
+              <div key={subtitle.id} className="space-y-4">
+                <h3
+                  className={`text-lg font-medium text-center ${profileData.profile_text_color}`}
+                >
+                  {subtitle.text}
+                </h3>
+                <div className="space-y-3">
+                  {links
+                    ?.filter((link) => link.subtitle_id === subtitle.id)
+                    .map((link) => (
+                      <LinkCard
+                        key={link.id}
+                        link={link}
+                        getLinkIcon={getLinkIcon}
+                        profileData={profileData}
+                      />
+                    ))}
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>

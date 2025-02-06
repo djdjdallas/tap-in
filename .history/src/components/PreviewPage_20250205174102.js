@@ -107,7 +107,6 @@ export default function PreviewPage({ userId }) {
   const [links, setLinks] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [avatarUrl, setAvatarUrl] = useState(PLACEHOLDER_IMAGE);
-  const [backgroundImageUrl, setBackgroundImageUrl] = useState(null);
 
   // Get custom appearance settings with fallbacks
   const profileData = {
@@ -131,22 +130,6 @@ export default function PreviewPage({ userId }) {
       ) || "text-gray-600",
   };
 
-  const getSignedUrl = async (bucket, filePath) => {
-    try {
-      if (!filePath) return null;
-      const pathParts = filePath.split(`${bucket}/`);
-      const relativePath = pathParts[pathParts.length - 1];
-      const { data, error } = await supabase.storage
-        .from(bucket)
-        .createSignedUrl(relativePath, 3600);
-      if (error) throw error;
-      return data.signedUrl;
-    } catch (error) {
-      console.error(`Error getting signed URL from ${bucket}:`, error);
-      return null;
-    }
-  };
-
   const getLinkIcon = (iconName) => {
     const Icon = socialIcons[iconName?.toLowerCase()] || socialIcons.link;
     return Icon ? (
@@ -167,20 +150,10 @@ export default function PreviewPage({ userId }) {
           table: "profiles",
           filter: `id=eq.${userId}`,
         },
-        async (payload) => {
+        (payload) => {
           console.log("Profile updated:", payload);
           if (payload.new) {
             setProfile(payload.new);
-            // Update background image URL if it changes
-            if (payload.new.background_image) {
-              const signedUrl = await getSignedUrl(
-                "backgrounds",
-                payload.new.background_image
-              );
-              setBackgroundImageUrl(signedUrl);
-            } else {
-              setBackgroundImageUrl(null);
-            }
           }
         }
       )
@@ -195,24 +168,6 @@ export default function PreviewPage({ userId }) {
           .single();
 
         if (profileError) throw profileError;
-
-        // Handle avatar URL
-        if (profileData?.avatar_url) {
-          const signedUrl = await getSignedUrl(
-            "avatars",
-            profileData.avatar_url
-          );
-          setAvatarUrl(signedUrl || PLACEHOLDER_IMAGE);
-        }
-
-        // Handle background image URL
-        if (profileData?.background_image) {
-          const signedUrl = await getSignedUrl(
-            "backgrounds",
-            profileData.background_image
-          );
-          setBackgroundImageUrl(signedUrl);
-        }
 
         const { data: subtitlesData, error: subtitlesError } = await supabase
           .from("subtitles")
@@ -276,18 +231,18 @@ export default function PreviewPage({ userId }) {
       <div className="max-w-2xl mx-auto p-8">
         <div
           className={`space-y-8 ${
-            backgroundImageUrl ? "" : profileData.profile_bg_color
+            profile?.background_image ? "" : profileData.profile_bg_color
           } border rounded-2xl shadow-sm p-8 relative overflow-hidden`}
           style={{
-            backgroundImage: backgroundImageUrl
-              ? `url(${backgroundImageUrl})`
+            backgroundImage: profile?.background_image
+              ? `url(${profile.background_image})`
               : "none",
             backgroundSize: "cover",
             backgroundPosition: "center",
           }}
         >
           {/* Background overlay for better text readability when using image */}
-          {backgroundImageUrl && (
+          {profile?.background_image && (
             <div className="absolute inset-0 bg-black bg-opacity-40" />
           )}
 
@@ -310,7 +265,7 @@ export default function PreviewPage({ userId }) {
             <div className="text-center space-y-4">
               <h1
                 className={`text-3xl font-bold ${
-                  backgroundImageUrl
+                  profile?.background_image
                     ? "text-white"
                     : profileData.profile_text_color
                 }`}
@@ -319,7 +274,7 @@ export default function PreviewPage({ userId }) {
               </h1>
               <p
                 className={
-                  backgroundImageUrl
+                  profile?.background_image
                     ? "text-white"
                     : profileData.profile_text_color
                 }
@@ -352,7 +307,7 @@ export default function PreviewPage({ userId }) {
                 <div key={subtitle.id} className="space-y-4">
                   <h3
                     className={`text-lg font-medium text-center ${
-                      backgroundImageUrl
+                      profile?.background_image
                         ? "text-white"
                         : profileData.profile_text_color
                     }`}
