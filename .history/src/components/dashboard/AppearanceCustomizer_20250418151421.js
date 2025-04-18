@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,15 +18,9 @@ import {
   CheckCircle,
   AlertCircle,
   RefreshCw,
-  Palette,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 
 // Color mappings between short codes and Tailwind classes
 const colorMappings = {
@@ -54,41 +48,6 @@ const colorMappings = {
   },
 };
 
-// Function to convert Tailwind class to css color value
-const tailwindToCssColor = (tailwindClass) => {
-  const colorMap = {
-    "bg-white": "#ffffff",
-    "bg-gray-50": "#f9fafb",
-    "bg-gray-100": "#f3f4f6",
-    "bg-blue-50": "#eff6ff",
-    "bg-green-50": "#f0fdf4",
-    "bg-pink-50": "#fdf2f8",
-    "text-gray-900": "#111827",
-    "text-gray-600": "#4b5563",
-    "text-blue-600": "#2563eb",
-    "text-green-600": "#16a34a",
-    "text-purple-600": "#9333ea",
-    "bg-blue-100": "#dbeafe",
-    "bg-green-100": "#dcfce7",
-    "bg-pink-100": "#fce7f3",
-    "bg-purple-100": "#f3e8ff",
-  };
-
-  return colorMap[tailwindClass] || "#ffffff";
-};
-
-// Function to convert css color to a custom Tailwind class
-const cssColorToTailwindClass = (cssColor, type) => {
-  // For simplicity, just create a custom inline style class
-  if (type.startsWith("profile_bg")) {
-    return `bg-[${cssColor}]`;
-  } else if (type.startsWith("button_bg")) {
-    return `bg-[${cssColor}]`;
-  } else {
-    return `text-[${cssColor}]`;
-  }
-};
-
 const getInitialTailwindClass = (shortCode, type) => {
   if (!shortCode) {
     // Default values for each type
@@ -99,11 +58,6 @@ const getInitialTailwindClass = (shortCode, type) => {
       button_text_color: "text-gray-900",
     };
     return defaults[type];
-  }
-
-  // Check if it's a custom color (starts with #)
-  if (shortCode.startsWith("#")) {
-    return cssColorToTailwindClass(shortCode, type);
   }
 
   // Map the shortcode to the corresponding Tailwind class based on type
@@ -120,21 +74,7 @@ const getInitialTailwindClass = (shortCode, type) => {
   }
 };
 
-// Determine if a class is a custom color
-const isCustomColor = (tailwindClass) => {
-  return tailwindClass.includes("bg-[") || tailwindClass.includes("text-[");
-};
-
-// Extract custom color from tailwind class
-const extractCustomColor = (tailwindClass) => {
-  if (isCustomColor(tailwindClass)) {
-    const match = tailwindClass.match(/\[(.*?)\]/);
-    return match ? match[1] : "#ffffff";
-  }
-  return tailwindToCssColor(tailwindClass);
-};
-
-// Reverse mappings for converting Tailwind classes back to short codes for storage
+// Reverse mappings for converting Tailwind classes back to short codes
 const reverseColorMappings = {
   backgrounds: Object.entries(colorMappings.backgrounds).reduce(
     (acc, [key, value]) => ({ ...acc, [value]: key }),
@@ -176,42 +116,7 @@ const colorOptions = {
   ],
 };
 
-// Custom color picker component
-const ColorPicker = ({ currentColor, onChange, type }) => {
-  const [color, setColor] = useState(extractCustomColor(currentColor));
-
-  const handleChange = (e) => {
-    const newColor = e.target.value;
-    setColor(newColor);
-
-    // Create custom tailwind class with the selected color
-    const newTailwindClass = cssColorToTailwindClass(newColor, type);
-    onChange(newTailwindClass);
-  };
-
-  return (
-    <div className="p-2">
-      <div className="mb-2 text-sm font-medium">Pick a Custom Color</div>
-      <div className="flex items-center gap-3">
-        <div className="relative w-40 h-10">
-          <input
-            type="color"
-            value={color}
-            onChange={handleChange}
-            className="absolute inset-0 w-full h-full cursor-pointer opacity-0"
-          />
-          <div
-            className="w-full h-full rounded-md border border-gray-300"
-            style={{ backgroundColor: color }}
-          ></div>
-        </div>
-        <div className="text-sm font-mono">{color}</div>
-      </div>
-    </div>
-  );
-};
-
-const ColorOptionButton = ({ label, value, selectedValue, onChange, type }) => (
+const ColorOptionButton = ({ label, value, selectedValue, onChange }) => (
   <button
     type="button"
     onClick={() => onChange(value)}
@@ -229,120 +134,64 @@ const ColorOptionButton = ({ label, value, selectedValue, onChange, type }) => (
 );
 
 // Preview card that shows how selected styles will look
-const StylePreview = ({ customization, backgroundImage }) => {
-  // Extract background and text styles
-  const bgStyle = isCustomColor(customization.profile_bg_color)
-    ? { backgroundColor: extractCustomColor(customization.profile_bg_color) }
-    : {};
-
-  const textStyle = isCustomColor(customization.profile_text_color)
-    ? { color: extractCustomColor(customization.profile_text_color) }
-    : {};
-
-  const buttonBgStyle = isCustomColor(customization.button_bg_color)
-    ? { backgroundColor: extractCustomColor(customization.button_bg_color) }
-    : {};
-
-  const buttonTextStyle = isCustomColor(customization.button_text_color)
-    ? { color: extractCustomColor(customization.button_text_color) }
-    : {};
-
-  return (
-    <div className="mt-6 border rounded-lg overflow-hidden">
-      <div className="p-4 bg-gray-100 border-b">
-        <h3 className="text-sm font-medium text-gray-700">Live Preview</h3>
-      </div>
-      <div
-        className={`p-6 ${
-          backgroundImage
-            ? ""
-            : !isCustomColor(customization.profile_bg_color)
-            ? customization.profile_bg_color
-            : ""
-        }`}
-        style={{
-          ...(backgroundImage
-            ? {
-                backgroundImage: `url(${backgroundImage})`,
-                backgroundSize: "cover",
-                backgroundPosition: "center",
-                position: "relative",
-              }
-            : bgStyle),
-        }}
-      >
-        {backgroundImage && (
-          <div
-            className="absolute inset-0 bg-black bg-opacity-40"
-            style={{ zIndex: 0 }}
-          />
-        )}
-        <div className="relative z-10">
-          <div className="text-center mb-4">
-            <div className="w-16 h-16 mx-auto bg-gray-300 rounded-full mb-2 flex items-center justify-center text-white">
-              <span>Avatar</span>
-            </div>
-            <h3
-              className={`text-lg font-bold ${
-                backgroundImage
-                  ? "text-white"
-                  : !isCustomColor(customization.profile_text_color)
-                  ? customization.profile_text_color
-                  : ""
-              }`}
-              style={backgroundImage ? {} : textStyle}
-            >
-              Profile Name
-            </h3>
-            <p
-              className={`text-sm ${
-                backgroundImage
-                  ? "text-white"
-                  : !isCustomColor(customization.profile_text_color)
-                  ? customization.profile_text_color
-                  : ""
-              }`}
-              style={backgroundImage ? {} : textStyle}
-            >
-              Your Title Goes Here
-            </p>
+const StylePreview = ({ customization, backgroundImage }) => (
+  <div className="mt-6 border rounded-lg overflow-hidden">
+    <div className="p-4 bg-gray-100 border-b">
+      <h3 className="text-sm font-medium text-gray-700">Live Preview</h3>
+    </div>
+    <div
+      className={`p-6 ${
+        backgroundImage ? "bg-cover bg-center" : customization.profile_bg_color
+      }`}
+      style={
+        backgroundImage
+          ? {
+              backgroundImage: `url(${backgroundImage})`,
+              position: "relative",
+            }
+          : {}
+      }
+    >
+      {backgroundImage && (
+        <div
+          className="absolute inset-0 bg-black bg-opacity-40"
+          style={{ zIndex: 0 }}
+        />
+      )}
+      <div className="relative z-10">
+        <div className="text-center mb-4">
+          <div className="w-16 h-16 mx-auto bg-gray-300 rounded-full mb-2 flex items-center justify-center text-white">
+            <span>Avatar</span>
           </div>
-          <div className="mt-4">
-            <div
-              className={`p-3 ${
-                !isCustomColor(customization.button_bg_color)
-                  ? customization.button_bg_color
-                  : ""
-              } rounded-lg flex items-center justify-between mb-2`}
-              style={buttonBgStyle}
-            >
-              <span
-                className={`${
-                  !isCustomColor(customization.button_text_color)
-                    ? customization.button_text_color
-                    : ""
-                }`}
-                style={buttonTextStyle}
-              >
-                Sample Link
-              </span>
-              <span
-                className={`${
-                  !isCustomColor(customization.button_text_color)
-                    ? customization.button_text_color
-                    : ""
-                }`}
-                style={buttonTextStyle}
-              >
-                →
-              </span>
-            </div>
+          <h3
+            className={`text-lg font-bold ${
+              backgroundImage ? "text-white" : customization.profile_text_color
+            }`}
+          >
+            Profile Name
+          </h3>
+          <p
+            className={`text-sm ${
+              backgroundImage ? "text-white" : customization.profile_text_color
+            }`}
+          >
+            Your Title Goes Here
+          </p>
+        </div>
+        <div className="mt-4">
+          <div
+            className={`p-3 ${customization.button_bg_color} rounded-lg flex items-center justify-between mb-2`}
+          >
+            <span className={`${customization.button_text_color}`}>
+              Sample Link
+            </span>
+            <span className={`${customization.button_text_color}`}>→</span>
           </div>
         </div>
       </div>
     </div>
-  );
-};
+  </div>
+);
 
 export function AppearanceCustomizer({ user, initialProfile }) {
   const supabase = createClientComponentClient();
@@ -545,52 +394,18 @@ export function AppearanceCustomizer({ user, initialProfile }) {
 
     setIsUpdating(true);
     try {
-      // Convert values for storage
-      // For standard Tailwind classes, use the short code mapping
-      // For custom colors, store the hex value directly
+      // Convert Tailwind classes back to short codes for storage
       const updateData = {
+        profile_bg_color:
+          reverseColorMappings.backgrounds[customization.profile_bg_color],
+        profile_text_color:
+          reverseColorMappings.text[customization.profile_text_color],
+        button_bg_color:
+          reverseColorMappings.buttons[customization.button_bg_color],
+        button_text_color:
+          reverseColorMappings.text[customization.button_text_color],
         updated_at: new Date().toISOString(),
       };
-
-      // Handle profile background color
-      if (isCustomColor(customization.profile_bg_color)) {
-        updateData.profile_bg_color = extractCustomColor(
-          customization.profile_bg_color
-        );
-      } else {
-        updateData.profile_bg_color =
-          reverseColorMappings.backgrounds[customization.profile_bg_color];
-      }
-
-      // Handle profile text color
-      if (isCustomColor(customization.profile_text_color)) {
-        updateData.profile_text_color = extractCustomColor(
-          customization.profile_text_color
-        );
-      } else {
-        updateData.profile_text_color =
-          reverseColorMappings.text[customization.profile_text_color];
-      }
-
-      // Handle button background color
-      if (isCustomColor(customization.button_bg_color)) {
-        updateData.button_bg_color = extractCustomColor(
-          customization.button_bg_color
-        );
-      } else {
-        updateData.button_bg_color =
-          reverseColorMappings.buttons[customization.button_bg_color];
-      }
-
-      // Handle button text color
-      if (isCustomColor(customization.button_text_color)) {
-        updateData.button_text_color = extractCustomColor(
-          customization.button_text_color
-        );
-      } else {
-        updateData.button_text_color =
-          reverseColorMappings.text[customization.button_text_color];
-      }
 
       const { error } = await supabase
         .from("profiles")
@@ -606,34 +421,6 @@ export function AppearanceCustomizer({ user, initialProfile }) {
     } finally {
       setIsUpdating(false);
     }
-  };
-
-  // Color picker option component (to add at the end of each color section)
-  const ColorPickerOption = ({ type }) => {
-    const currentValue = customization[type];
-
-    return (
-      <Popover>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            className="h-full flex flex-col items-center justify-center p-3 gap-2 border border-dashed border-gray-300 hover:border-gray-400"
-          >
-            <Palette className="h-6 w-6 text-gray-400" />
-            <span className="text-sm text-gray-500">Custom Color</span>
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-auto p-0">
-          <ColorPicker
-            currentColor={currentValue}
-            onChange={(value) =>
-              setCustomization((prev) => ({ ...prev, [type]: value }))
-            }
-            type={type}
-          />
-        </PopoverContent>
-      </Popover>
-    );
   };
 
   // Render component based on selected tab
@@ -681,7 +468,7 @@ export function AppearanceCustomizer({ user, initialProfile }) {
                 )}
               </div>
 
-              <div className="grid grid-cols-3 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <label className="flex flex-col items-center justify-center p-5 border-2 border-dashed rounded-lg cursor-pointer hover:border-blue-500 transition-colors bg-gray-50">
                   <input
                     type="file"
@@ -710,12 +497,8 @@ export function AppearanceCustomizer({ user, initialProfile }) {
                         profile_bg_color: value,
                       }))
                     }
-                    type="profile_bg_color"
                   />
                 ))}
-
-                {/* Add color picker option */}
-                <ColorPickerOption type="profile_bg_color" />
               </div>
 
               {backgroundImage && !isCheckingBackground && (
@@ -743,7 +526,7 @@ export function AppearanceCustomizer({ user, initialProfile }) {
                 <h3 className="text-base font-medium text-gray-700 mb-3">
                   Profile Text Color
                 </h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 gap-3">
                   {colorOptions.textColors.map((option) => (
                     <ColorOptionButton
                       key={option.value}
@@ -756,12 +539,8 @@ export function AppearanceCustomizer({ user, initialProfile }) {
                           profile_text_color: value,
                         }))
                       }
-                      type="profile_text_color"
                     />
                   ))}
-
-                  {/* Add color picker option */}
-                  <ColorPickerOption type="profile_text_color" />
                 </div>
               </div>
 
@@ -769,7 +548,7 @@ export function AppearanceCustomizer({ user, initialProfile }) {
                 <h3 className="text-base font-medium text-gray-700 mb-3">
                   Button Text Color
                 </h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 gap-3">
                   {colorOptions.textColors.map((option) => (
                     <ColorOptionButton
                       key={option.value}
@@ -782,12 +561,8 @@ export function AppearanceCustomizer({ user, initialProfile }) {
                           button_text_color: value,
                         }))
                       }
-                      type="button_text_color"
                     />
                   ))}
-
-                  {/* Add color picker option */}
-                  <ColorPickerOption type="button_text_color" />
                 </div>
               </div>
             </div>
@@ -798,7 +573,7 @@ export function AppearanceCustomizer({ user, initialProfile }) {
               <h3 className="text-base font-medium text-gray-700 mb-3">
                 Button Background Colors
               </h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 {colorOptions.buttonBackgrounds.map((option) => (
                   <ColorOptionButton
                     key={option.value}
@@ -811,12 +586,8 @@ export function AppearanceCustomizer({ user, initialProfile }) {
                         button_bg_color: value,
                       }))
                     }
-                    type="button_bg_color"
                   />
                 ))}
-
-                {/* Add color picker option */}
-                <ColorPickerOption type="button_bg_color" />
               </div>
             </div>
           </TabsContent>
@@ -847,5 +618,3 @@ export function AppearanceCustomizer({ user, initialProfile }) {
     </Card>
   );
 }
-
-export default AppearanceCustomizer;

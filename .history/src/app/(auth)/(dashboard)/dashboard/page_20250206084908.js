@@ -86,6 +86,12 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen">
+      <DashboardHeader
+        user={user}
+        onSignOut={handleSignOut}
+        onShare={handleShare}
+        onPreview={handlePreview}
+      />
       <AdminDashboard user={user} />
     </div>
   );

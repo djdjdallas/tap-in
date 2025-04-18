@@ -26,6 +26,11 @@ export const useProfile = (input) => {
     subtitles: [],
   });
 
+  // Debug input
+  useEffect(() => {
+    console.log("useProfile input:", input);
+  }, [input]);
+
   // Fetch default avatar
   useEffect(() => {
     const getDefaultAvatarUrl = async () => {
@@ -47,9 +52,12 @@ export const useProfile = (input) => {
 
   // Set up realtime subscription
   useEffect(() => {
-    if (!input?.id) return;
+    if (!input?.id && typeof input !== "string") return;
 
     console.log("Setting up profile subscription for:", input);
+
+    const profileFilter =
+      typeof input === "string" ? `username=eq.${input}` : `id=eq.${input.id}`;
 
     const profileChannel = supabase
       .channel("profile_changes")
@@ -59,13 +67,13 @@ export const useProfile = (input) => {
           event: "*",
           schema: "public",
           table: "profiles",
-          filter: `id=eq.${input.id}`,
+          filter: profileFilter,
         },
         (payload) => {
           console.log("Profile update received:", payload);
           if (payload.new) {
-            setProfileData((prev) => ({
-              ...prev,
+            setProfileData((prevData) => ({
+              ...prevData,
               ...payload.new,
             }));
           }
@@ -85,7 +93,9 @@ export const useProfile = (input) => {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        if (!input?.id) {
+        // Input validation
+        if (!input?.id && typeof input !== "string") {
+          console.log("No valid input provided to useProfile");
           setIsLoading(false);
           return;
         }
@@ -93,22 +103,33 @@ export const useProfile = (input) => {
         console.log("Fetching profile for:", input);
         setError(null);
 
-        // Fetch profile
-        const { data: profile, error: fetchError } = await supabase
+        // Build query
+        let query = supabase
           .from("profiles")
-          .select("*")
-          .eq("id", input.id)
-          .single();
+          .select("*, links (*), subtitles (*)");
 
-        console.log("Profile fetch response:", { profile, fetchError });
+        if (typeof input === "string") {
+          query = query.eq("username", input);
+        } else if (input?.id) {
+          query = query.eq("id", input.id);
+        } else {
+          throw new Error(
+            "Invalid input: must be username string or user object with id"
+          );
+        }
+
+        // Execute query
+        const { data: profile, error: fetchError } = await query.single();
+        console.log("Profile query response:", { profile, fetchError });
 
         if (fetchError) {
-          if (fetchError.code === "PGRST116") {
+          // Handle case where profile doesn't exist for a new user
+          if (fetchError.code === "PGRST116" && input?.id) {
             console.log("Creating default profile for new user");
 
             const defaultProfile = {
               id: input.id,
-              name: input?.user_metadata?.name || "New User",
+              name: input?.name || "New User",
               username: null,
               title: "Digital Creator | App Developer",
               location: "Los Angeles, CA",
@@ -135,44 +156,41 @@ export const useProfile = (input) => {
             }
 
             console.log("Created default profile:", newProfile);
-            setProfileData(newProfile);
-          } else {
-            throw fetchError;
+
+            setProfileData({
+              ...newProfile,
+              links: [],
+              subtitles: [],
+              avatar_url: defaultAvatar,
+            });
+            setIsLoading(false);
+            return;
           }
-        } else if (profile) {
-          console.log("Setting existing profile data:", profile);
-          setProfileData(profile);
+          console.error("Error fetching profile:", fetchError);
+          throw fetchError;
         }
 
-        // Fetch links
-        const { data: links } = await supabase
-          .from("links")
-          .select("*")
-          .eq("user_id", input.id)
-          .order("order_index");
-
-        // Fetch subtitles
-        const { data: subtitles } = await supabase
-          .from("subtitles")
-          .select("*")
-          .eq("user_id", input.id)
-          .order("order_index");
-
-        setProfileData((prev) => ({
-          ...prev,
-          links: links || [],
-          subtitles: subtitles || [],
-        }));
+        if (profile) {
+          console.log("Setting profile data:", profile);
+          setProfileData({
+            ...profile,
+            links: profile.links || [],
+            subtitles: profile.subtitles || [],
+            avatar_url: profile.avatar_url || defaultAvatar,
+          });
+        }
       } catch (error) {
+        const errorMessage =
+          error?.message || error?.toString() || "Failed to load profile";
         console.error("Profile fetch failed:", {
           error,
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code,
+          message: errorMessage,
+          details: error?.details,
+          hint: error?.hint,
+          code: error?.code,
         });
-        setError(error.message || "Failed to load profile");
-        toast.error("Failed to load profile");
+        setError(errorMessage);
+        toast.error(errorMessage);
       } finally {
         setIsLoading(false);
       }
@@ -182,71 +200,43 @@ export const useProfile = (input) => {
   }, [input, defaultAvatar]);
 
   const handleSave = async (updates) => {
-    try {
-      if (!input?.id) {
-        throw new Error("User ID is required");
-      }
+    if (!input?.id) {
+      const errorMessage = "User ID is required";
+      console.error("Save failed:", errorMessage);
+      setError(errorMessage);
+      return false;
+    }
 
-      console.log("Attempting to save profile updates:", updates);
+    try {
+      console.log("Saving profile updates:", updates);
       setError(null);
 
-      // First check if this is a username update and if it's already taken
-      if (updates.username) {
-        const { data: existingUser, error: checkError } = await supabase
-          .from("profiles")
-          .select("id")
-          .eq("username", updates.username)
-          .neq("id", input.id)
-          .single();
-
-        if (checkError && checkError.code !== "PGRST116") {
-          throw checkError;
-        }
-
-        if (existingUser) {
-          throw new Error("Username is already taken");
-        }
-      }
-
-      // Prepare update data
-      const updateData = {
+      const { error: updateError } = await supabase.from("profiles").upsert({
         ...updates,
         id: input.id,
         updated_at: new Date().toISOString(),
-      };
-
-      console.log("Sending update to Supabase:", updateData);
-
-      const { data, error: updateError } = await supabase
-        .from("profiles")
-        .upsert(updateData)
-        .select()
-        .single();
+      });
 
       if (updateError) {
-        console.error("Supabase update error:", updateError);
+        console.error("Error updating profile:", updateError);
         throw updateError;
       }
 
-      console.log("Profile update successful:", data);
-
-      // Update local state
-      setProfileData((prev) => ({
-        ...prev,
-        ...data,
-      }));
-
+      console.log("Profile saved successfully");
+      toast.success("Profile saved successfully");
       return true;
     } catch (error) {
+      const errorMessage =
+        error?.message || error?.toString() || "Failed to save profile changes";
       console.error("Profile save failed:", {
         error,
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code,
+        message: errorMessage,
+        details: error?.details,
+        hint: error?.hint,
+        code: error?.code,
       });
-      setError(error.message || "Failed to save profile changes");
-      toast.error(error.message || "Failed to save profile changes");
+      setError(errorMessage);
+      toast.error(errorMessage);
       return false;
     }
   };

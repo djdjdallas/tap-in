@@ -1,3 +1,4 @@
+// components/DashboardHeader.js
 "use client";
 import React from "react";
 import { Button } from "@/components/ui/button";
@@ -5,7 +6,6 @@ import { Eye } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import useProfile from "@/app/hooks/useProfile";
-
 const DashboardHeader = ({ user, onSignOut }) => {
   const router = useRouter();
   const { profileData, isLoading } = useProfile(user);
@@ -21,16 +21,14 @@ const DashboardHeader = ({ user, onSignOut }) => {
       }
     } else {
       toast.error("Please set a username first");
-      router.push("/dashboard/username");
     }
   };
 
   const handlePreview = () => {
     if (profileData?.username) {
-      router.push(`/preview/${profileData.username}`);
+      window.open(`/${profileData.username}`, "_blank");
     } else {
-      // Fallback to user ID if no username is set
-      router.push(`/preview/${user.id}`);
+      toast.error("Please set a username first");
     }
   };
 
