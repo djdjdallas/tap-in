@@ -70,31 +70,3 @@ body {
     @apply bg-background text-foreground;
   }
 }
-
-/* Fix for flex containers that might be causing overflow */
-.flex, 
-.flex-row, 
-div[class*="flex-"], 
-div[class*="grid-"] {
-  flex-wrap: wrap;
-}
-
-/* Ensure the body and html take full width */
-html, 
-body {
-  width: 100%;
-  max-width: 100vw;
-  overflow-x: hidden;
-}
-
-/* Fix for potential absolute/fixed position elements */
-.fixed,
-.absolute {
-  max-width: 100vw;
-}
-
-/* Force all images to respect container boundaries */
-img {
-  max-width: 100%;
-  height: auto;
-}
