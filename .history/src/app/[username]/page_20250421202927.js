@@ -2,8 +2,9 @@
 import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 
-// Import the fixed components
+// Import the components needed for the profile page
 import Profile from "@/components/Profile";
 import LinkContainer from "@/components/LinkContainer";
 
@@ -15,7 +16,7 @@ export default async function ProfilePage({ params }) {
   const supabase = createServerComponentClient({ cookies: () => cookieStore });
 
   try {
-    // Fetch profile data
+    // Fetch profile and links data
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("*")
@@ -45,20 +46,15 @@ export default async function ProfilePage({ params }) {
     const subtitles = subtitlesResponse.data || [];
     const links = linksResponse.data || [];
 
-    // Get public URL for avatar (the client component will handle signing the URL)
-    let avatarUrl = profile.avatar_url || "/api/placeholder/128/128";
-
     return (
       <main className="min-h-screen bg-gradient-to-tr from-gray-50 via-gray-100 to-gray-50 py-16 px-6">
         <div className="max-w-2xl mx-auto space-y-8">
           <Profile
             name={profile.name}
             title={profile.title}
-            avatarUrl={avatarUrl}
+            avatarUrl={profile.avatar_url}
             location={profile.location}
             availability={profile.availability}
-            userId={profile.id}
-            isEditable={false}
           />
           <LinkContainer subtitles={subtitles} links={links} />
           <div className="text-center text-sm text-gray-500">

@@ -7,12 +7,16 @@ export async function middleware(req) {
   const supabase = createMiddlewareClient({ req, res });
   const { pathname } = req.nextUrl;
 
-  // Allow public profile access
+  // Allow public profile access - this regex matches paths like /username but not /dashboard/username
+  // Ensures that paths like /api, /login, /dashboard, etc. are not matched
   if (
     pathname.match(/^\/[^\/]+$/) &&
     !pathname.startsWith("/api") &&
-    !pathname.startsWith("/dashboard")
+    !pathname.startsWith("/_next") &&
+    !pathname.startsWith("/dashboard") &&
+    !pathname.match(/\.(ico|png|jpg|jpeg|svg|css|js)$/)
   ) {
+    console.log("Public profile access:", pathname);
     return res;
   }
 
