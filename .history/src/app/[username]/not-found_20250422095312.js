@@ -1,9 +1,9 @@
-// src/app/[username]/not-found.js
+// app/[username]/not-found.js
 import Link from "next/link";
 
 export default function ProfileNotFound() {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-tr from-gray-50 via-gray-100 to-gray-50 py-16 px-6">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-tr from-gray-50 via-gray-100 to-gray-50">
       <div className="max-w-md w-full p-8 bg-white rounded-xl shadow-lg text-center">
         <h1 className="text-4xl font-bold mb-4">Profile Not Found</h1>
         <p className="text-gray-600 mb-8">
