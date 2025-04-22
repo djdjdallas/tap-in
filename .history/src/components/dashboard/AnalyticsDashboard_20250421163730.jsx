@@ -38,12 +38,14 @@ import {
 // Define social icons object at the top to avoid reference errors
 const socialIcons = {
   website: Globe,
+  twitter: Twitter,
   github: Globe,
   linkedin: Globe,
   instagram: Globe,
   youtube: Globe,
   facebook: Globe,
   email: Globe,
+  link: Link,
 };
 
 // Utility function to get date range
@@ -912,4 +914,3 @@ const AnalyticsDashboard = ({ user }) => {
     </div>
   );
 };
-export default AnalyticsDashboard;

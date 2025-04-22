@@ -44,6 +44,7 @@ const socialIcons = {
   youtube: Globe,
   facebook: Globe,
   email: Globe,
+  link: Link,
 };
 
 // Utility function to get date range
@@ -912,4 +913,3 @@ const AnalyticsDashboard = ({ user }) => {
     </div>
   );
 };
-export default AnalyticsDashboard;

@@ -35,17 +35,6 @@ import {
   AlertTriangle,
 } from "lucide-react";
 
-// Define social icons object at the top to avoid reference errors
-const socialIcons = {
-  website: Globe,
-  github: Globe,
-  linkedin: Globe,
-  instagram: Globe,
-  youtube: Globe,
-  facebook: Globe,
-  email: Globe,
-};
-
 // Utility function to get date range
 const getDateRangeFilter = (timeRange) => {
   const now = new Date();
@@ -71,22 +60,14 @@ const getDateRangeLabel = (timeRange) => {
 
 // Utility function to get device icon
 const getDeviceIcon = (deviceType) => {
-  // Add null/undefined check
-  if (!deviceType) return Monitor;
-
-  try {
-    switch (deviceType.toLowerCase()) {
-      case "mobile":
-        return Smartphone;
-      case "tablet":
-        return Tablet;
-      case "desktop":
-      default:
-        return Monitor;
-    }
-  } catch (error) {
-    // If deviceType is not a string or has no toLowerCase method
-    return Monitor;
+  switch (deviceType.toLowerCase()) {
+    case "mobile":
+      return Smartphone;
+    case "tablet":
+      return Tablet;
+    case "desktop":
+    default:
+      return Monitor;
   }
 };
 
@@ -152,192 +133,131 @@ const AnalyticsDashboard = ({ user }) => {
       );
 
       // Fetch current period summary
-      let currentSummary = [];
-      try {
-        const { data, error } = await supabase
-          .from("page_views")
-          .select("id, timestamp, session_duration")
-          .eq("user_id", user.id)
-          .gte("timestamp", startDate);
+      const { data: currentSummary, error: currentError } = await supabase
+        .from("page_views")
+        .select("id, timestamp, session_duration")
+        .eq("user_id", user.id)
+        .gte("timestamp", startDate);
 
-        if (error) {
-          console.warn("Error fetching page views:", error);
-        } else {
-          currentSummary = data || [];
-        }
-      } catch (err) {
-        console.warn("Exception fetching page views:", err);
-        currentSummary = [];
-      }
+      if (currentError) throw currentError;
 
       // Fetch previous period summary
-      let previousSummary = [];
-      try {
-        const { data, error } = await supabase
-          .from("page_views")
-          .select("id, timestamp, session_duration")
-          .eq("user_id", user.id)
-          .gte("timestamp", previousStartDate)
-          .lt("timestamp", startDate);
+      const { data: previousSummary, error: previousError } = await supabase
+        .from("page_views")
+        .select("id, timestamp, session_duration")
+        .eq("user_id", user.id)
+        .gte("timestamp", previousStartDate)
+        .lt("timestamp", startDate);
 
-        if (error) {
-          console.warn("Error fetching previous page views:", error);
-        } else {
-          previousSummary = data || [];
-        }
-      } catch (err) {
-        console.warn("Exception fetching previous page views:", err);
-        previousSummary = [];
-      }
+      if (previousError) throw previousError;
 
       // Fetch clicks data
-      let clicksData = [];
-      try {
-        const { data, error } = await supabase
-          .from("link_clicks")
-          .select("id, timestamp, link_id")
-          .eq("user_id", user.id)
-          .gte("timestamp", startDate);
+      const { data: clicksData, error: clicksError } = await supabase
+        .from("link_clicks")
+        .select("id, timestamp, link_id")
+        .eq("user_id", user.id)
+        .gte("timestamp", startDate);
 
-        if (error) {
-          console.warn("Error fetching link clicks:", error);
-        } else {
-          clicksData = data || [];
-        }
-      } catch (err) {
-        console.warn("Exception fetching link clicks:", err);
-        clicksData = [];
-      }
+      if (clicksError) throw clicksError;
 
       // Fetch device stats using the custom function
-      let deviceData = [];
-      try {
-        const { data, error } = await supabase.rpc("get_device_stats", {
+      const { data: deviceData, error: deviceError } = await supabase.rpc(
+        "get_device_stats",
+        {
           user_id_param: user.id,
           start_date_param: startDate,
-        });
-
-        if (error) {
-          console.warn("Error fetching device stats:", error);
-        } else {
-          deviceData = data || [];
         }
-      } catch (err) {
-        console.warn("RPC function get_device_stats may not exist:", err);
-        deviceData = [];
-      }
+      );
+
+      if (deviceError) throw deviceError;
 
       // Fetch geographic distribution using the custom function
-      let geoData = [];
-      try {
-        const { data, error } = await supabase.rpc("get_geo_stats", {
+      const { data: geoData, error: geoError } = await supabase.rpc(
+        "get_geo_stats",
+        {
           user_id_param: user.id,
           start_date_param: startDate,
-        });
-
-        if (error) {
-          console.warn("Error fetching geo stats:", error);
-        } else {
-          geoData = data || [];
         }
-      } catch (err) {
-        console.warn("RPC function get_geo_stats may not exist:", err);
-        geoData = [];
-      }
+      );
 
-      // Calculate metrics with safeguards
+      if (geoError) throw geoError;
+
+      // Calculate metrics
       const currentMetrics = {
         views: currentSummary?.length || 0,
         clicks: clicksData?.length || 0,
         avgTime:
-          currentSummary && currentSummary.length > 0
-            ? currentSummary.reduce(
-                (acc, curr) => acc + (curr.session_duration || 0),
-                0
-              ) / currentSummary.length
-            : 0,
+          currentSummary?.reduce(
+            (acc, curr) => acc + (curr.session_duration || 0),
+            0
+          ) / (currentSummary?.length || 1) || 0,
         bounceRate:
-          currentSummary && currentSummary.length > 0
-            ? ((currentSummary.filter(
-                (view) => (view.session_duration || 0) < 10
-              ).length || 0) /
-                currentSummary.length) *
-              100
-            : 0,
+          ((currentSummary?.filter((view) => view.session_duration < 10)
+            ?.length || 0) /
+            (currentSummary?.length || 1)) *
+          100,
       };
 
       const previousMetrics = {
         views: previousSummary?.length || 0,
         clicks: previousSummary?.length || 0,
         avgTime:
-          previousSummary && previousSummary.length > 0
-            ? previousSummary.reduce(
-                (acc, curr) => acc + (curr.session_duration || 0),
-                0
-              ) / previousSummary.length
-            : 0,
+          previousSummary?.reduce(
+            (acc, curr) => acc + (curr.session_duration || 0),
+            0
+          ) / (previousSummary?.length || 1) || 0,
         bounceRate:
-          previousSummary && previousSummary.length > 0
-            ? ((previousSummary.filter(
-                (view) => (view.session_duration || 0) < 10
-              ).length || 0) /
-                previousSummary.length) *
-              100
-            : 0,
+          ((previousSummary?.filter((view) => view.session_duration < 10)
+            ?.length || 0) /
+            (previousSummary?.length || 1)) *
+          100,
       };
 
       // Calculate device distribution
       const totalDeviceViews =
-        deviceData?.reduce((sum, item) => sum + Number(item.count || 0), 0) ||
-        0;
+        deviceData?.reduce((sum, item) => sum + Number(item.count), 0) || 0;
       const deviceStats =
         deviceData?.map((item) => ({
           name: item.device_type || "Unknown",
           value: totalDeviceViews
-            ? Math.round((Number(item.count || 0) / totalDeviceViews) * 100)
+            ? Math.round((Number(item.count) / totalDeviceViews) * 100)
             : 0,
-          icon: getDeviceIcon(item.device_type),
-          count: Number(item.count || 0) || 0,
+          icon: getDeviceIcon(item.device_type || "desktop"),
+          count: Number(item.count) || 0,
         })) || [];
 
       // Fetch and calculate link performance
-      let topLinks = [];
-      try {
-        const { data: links, error: linksError } = await supabase
-          .from("links")
-          .select(
-            `
-            id,
-            title,
-            url,
-            icon,
-            link_clicks(count),
-            page_views(count)
+      const { data: links, error: linksError } = await supabase
+        .from("links")
+        .select(
           `
-          )
-          .eq("user_id", user.id);
+          id,
+          title,
+          url,
+          icon,
+          link_clicks(count),
+          page_views(count)
+        `
+        )
+        .eq("user_id", user.id);
 
-        if (linksError) {
-          console.warn("Error fetching links:", linksError);
-        } else if (links) {
-          topLinks = links
-            .map((link) => ({
-              id: link.id,
-              name: link.title || "",
-              url: link.url || "",
-              icon: link.icon || "link",
-              clicks: link.link_clicks?.length || 0,
-              views: link.page_views?.length || 0,
-              clickRate: link.page_views?.length
-                ? ((link.link_clicks?.length || 0) / link.page_views?.length) *
-                  100
-                : 0,
-            }))
-            .sort((a, b) => b.clicks - a.clicks);
-        }
-      } catch (err) {
-        console.warn("Exception fetching links:", err);
-      }
+      if (linksError) throw linksError;
+
+      const topLinks =
+        links
+          ?.map((link) => ({
+            id: link.id,
+            name: link.title,
+            url: link.url,
+            icon: link.icon || "link",
+            clicks: link.link_clicks?.length || 0,
+            views: link.page_views?.length || 0,
+            clickRate: link.page_views?.length
+              ? ((link.link_clicks?.length || 0) / link.page_views?.length) *
+                100
+              : 0,
+          }))
+          .sort((a, b) => b.clicks - a.clicks) || [];
 
       setAnalyticsData({
         totalViews: currentMetrics.views,
@@ -350,7 +270,7 @@ const AnalyticsDashboard = ({ user }) => {
           geoData
             ?.map((item) => ({
               country: item.country || "Unknown",
-              visits: Number(item.count || 0),
+              visits: Number(item.count),
             }))
             .sort((a, b) => b.visits - a.visits) || [],
         trends: {
@@ -371,18 +291,7 @@ const AnalyticsDashboard = ({ user }) => {
       setLastUpdated(new Date());
     } catch (error) {
       console.error("Error fetching analytics:", error);
-
-      // Improved error handling with proper fallbacks
-      let errorMessage = "Failed to fetch analytics data";
-
-      if (error && typeof error === "object") {
-        errorMessage =
-          error.message || error.error || error.details || errorMessage;
-      } else if (typeof error === "string") {
-        errorMessage = error;
-      }
-
-      setError(errorMessage);
+      setError(error.message || "Failed to fetch analytics data");
     } finally {
       setIsLoading(false);
     }
@@ -541,6 +450,18 @@ const AnalyticsDashboard = ({ user }) => {
 
   // Get top 3 locations for overview tab
   const top3Locations = analyticsData.locationData.slice(0, 3);
+
+  const socialIcons = {
+    website: Globe,
+    twitter: Twitter,
+    github: Globe,
+    linkedin: Globe,
+    instagram: Globe,
+    youtube: Globe,
+    facebook: Globe,
+    email: Globe,
+    link: Globe,
+  };
 
   return (
     <div className="space-y-6">
@@ -912,4 +833,5 @@ const AnalyticsDashboard = ({ user }) => {
     </div>
   );
 };
+
 export default AnalyticsDashboard;

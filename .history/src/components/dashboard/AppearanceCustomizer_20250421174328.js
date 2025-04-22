@@ -23,6 +23,7 @@ import ButtonsTab from "@/app/utils/buttonsTab";
 import StylePreview from "@/app/utils/stylePreview";
 
 // Import services
+import { backgroundService } from "./backgroundService";
 import { backgroundService } from "@/app/utils/backgroundService";
 import { profileService } from "@/app/utils/profileService";
 

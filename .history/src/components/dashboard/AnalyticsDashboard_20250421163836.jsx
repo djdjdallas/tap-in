@@ -912,4 +912,3 @@ const AnalyticsDashboard = ({ user }) => {
     </div>
   );
 };
-export default AnalyticsDashboard;

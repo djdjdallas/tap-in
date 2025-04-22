@@ -22,11 +22,21 @@ const Sidebar = () => {
       icon: BarChart,
       href: "/dashboard",
     },
+    // {
+    //   title: "Links",
+    //   icon: LinkIcon,
+    //   href: "/dashboard/links",
+    // },
     {
       title: "Username",
       icon: UserCircle,
       href: "/dashboard/username",
     },
+    // {
+    //   title: "Appearance",
+    //   icon: Palette,
+    //   href: "/dashboard/appearance",
+    // },
     {
       title: "Analytics",
       icon: ChartBar,
@@ -41,7 +51,7 @@ const Sidebar = () => {
 
   return (
     <div
-      className={`fixed h-screen bg-white border-r shadow-sm transition-all duration-300 ease-in-out z-50 ${
+      className={`fixed h-screen bg-white border-r shadow-sm transition-all duration-300 ease-in-out ${
         isHovered ? "w-64" : "w-16"
       }`}
       onMouseEnter={() => setIsHovered(true)}

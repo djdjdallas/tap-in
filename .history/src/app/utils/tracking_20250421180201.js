@@ -12,7 +12,6 @@ const getVisitorId = () => {
       }
       return visitorId;
     } catch (error) {
-      // Suppress user-visible errors
       console.warn("Error accessing localStorage:", error);
       return `fallback-${Math.random().toString(36).substring(2, 15)}`;
     }
@@ -38,7 +37,6 @@ const getDeviceType = () => {
       }
       return "desktop";
     } catch (error) {
-      // Suppress user-visible errors
       console.warn("Error detecting device type:", error);
       return "unknown";
     }
@@ -46,12 +44,13 @@ const getDeviceType = () => {
   return "unknown"; // Fallback for server-side rendering
 };
 
-// Safe error logging helper - only for console, not user-visible
+// Safe error logging helper
 const safeLogError = (error) => {
   // Create a safe error object with only string properties
   const safeError = {
     message: String(error.message || "Unknown error"),
     name: String(error.name || "Error"),
+    stack: String(error.stack || ""),
   };
 
   // Add any additional properties if they exist and are strings
@@ -62,7 +61,8 @@ const safeLogError = (error) => {
   return safeError;
 };
 
-// Track page view - silently handle errors
+// Track page view
+// Track page view - fixed version
 export const trackPageView = async (userId) => {
   // Only run in browser environment
   if (typeof window === "undefined") return;
@@ -72,17 +72,14 @@ export const trackPageView = async (userId) => {
     const supabase = createClientComponentClient();
 
     if (!userId) {
-      // Silent failure - just log to console
       console.warn("No userId provided for tracking page view");
       return;
     }
 
-    // Debug log - only visible in console
-    if (process.env.NODE_ENV === "development") {
-      console.log("Tracking page view for user:", userId);
-    }
+    console.log("Tracking page view for user:", userId);
 
     const payload = {
+      // Change column name to match schema diagram exactly
       user_id: userId,
       visitor_id: getVisitorId(),
       device_type: getDeviceType(),
@@ -91,13 +88,10 @@ export const trackPageView = async (userId) => {
       timestamp: new Date().toISOString(),
     };
 
-    // Only log in development
-    if (process.env.NODE_ENV === "development") {
-      console.log("Page view payload:", payload);
-    }
+    console.log("Page view payload:", payload);
 
-    // Try the insert but don't show errors to users
-    await supabase.from("page_views").insert({
+    // Explicitly name columns in the insert to avoid ambiguity
+    const { data, error } = await supabase.from("page_views").insert({
       user_id: payload.user_id,
       visitor_id: payload.visitor_id,
       device_type: payload.device_type,
@@ -106,25 +100,26 @@ export const trackPageView = async (userId) => {
       timestamp: payload.timestamp,
     });
 
-    // Success logging only in development
-    if (process.env.NODE_ENV === "development") {
-      console.log("Page view tracking attempted");
+    if (error) {
+      console.error("Supabase insert error:", error.message);
+      console.error("Full error object:", JSON.stringify(safeLogError(error)));
+      return;
     }
+
+    console.log("Page view tracked successfully");
   } catch (error) {
-    // Only log errors to console, not to the user
-    if (process.env.NODE_ENV === "development") {
-      console.error(
-        "Error tracking page view:",
-        error?.message || "Unknown error"
-      );
-      if (error) {
-        console.error("Error details:", JSON.stringify(safeLogError(error)));
-      }
+    // More detailed error logging
+    console.error(
+      "Error tracking page view:",
+      error?.message || "Unknown error"
+    );
+    if (error) {
+      console.error("Error details:", JSON.stringify(safeLogError(error)));
     }
   }
 };
 
-// Track link click - silently handle errors
+// Track link click - fixed version
 export const trackLinkClick = async (userId, linkId) => {
   // Only run in browser environment
   if (typeof window === "undefined") return;
@@ -134,15 +129,11 @@ export const trackLinkClick = async (userId, linkId) => {
     const supabase = createClientComponentClient();
 
     if (!userId || !linkId) {
-      // Silent failure - just log to console
       console.warn("Missing userId or linkId for tracking link click");
       return;
     }
 
-    // Debug log - only visible in console
-    if (process.env.NODE_ENV === "development") {
-      console.log("Tracking link click:", { userId, linkId });
-    }
+    console.log("Tracking link click:", { userId, linkId });
 
     const payload = {
       user_id: userId,
@@ -153,13 +144,10 @@ export const trackLinkClick = async (userId, linkId) => {
       timestamp: new Date().toISOString(),
     };
 
-    // Only log in development
-    if (process.env.NODE_ENV === "development") {
-      console.log("Link click payload:", payload);
-    }
+    console.log("Link click payload:", payload);
 
-    // Try the insert but don't show errors to users
-    await supabase.from("link_clicks").insert({
+    // Explicitly name columns in the insert to avoid ambiguity
+    const { data, error } = await supabase.from("link_clicks").insert({
       user_id: payload.user_id,
       link_id: payload.link_id,
       visitor_id: payload.visitor_id,
@@ -168,20 +156,21 @@ export const trackLinkClick = async (userId, linkId) => {
       timestamp: payload.timestamp,
     });
 
-    // Success logging only in development
-    if (process.env.NODE_ENV === "development") {
-      console.log("Link click tracking attempted");
+    if (error) {
+      console.error("Supabase insert error:", error.message);
+      console.error("Full error object:", JSON.stringify(safeLogError(error)));
+      return;
     }
+
+    console.log("Link click tracked successfully");
   } catch (error) {
-    // Only log errors to console, not to the user
-    if (process.env.NODE_ENV === "development") {
-      console.error(
-        "Error tracking link click:",
-        error?.message || "Unknown error"
-      );
-      if (error) {
-        console.error("Error details:", JSON.stringify(safeLogError(error)));
-      }
+    // More detailed error logging
+    console.error(
+      "Error tracking link click:",
+      error?.message || "Unknown error"
+    );
+    if (error) {
+      console.error("Error details:", JSON.stringify(safeLogError(error)));
     }
   }
 };

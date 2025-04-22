@@ -14,7 +14,6 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import useProfile from "@/app/hooks/useProfile";
 import Link from "next/link";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,12 +28,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-const DashboardHeader = ({ user }) => {
+const DashboardHeader = ({ user, onSignOut }) => {
   const router = useRouter();
-  const supabase = createClientComponentClient();
   const { profileData, isLoading } = useProfile(user);
   const [copied, setCopied] = useState(false);
-  const [isSigningOut, setIsSigningOut] = useState(false);
 
   const handleShare = async () => {
     if (profileData?.username) {
@@ -70,25 +67,6 @@ const DashboardHeader = ({ user }) => {
     } else {
       toast.error("Please set a username first");
       router.push("/dashboard/username");
-    }
-  };
-
-  const handleSignOut = async () => {
-    try {
-      setIsSigningOut(true);
-      const { error } = await supabase.auth.signOut();
-
-      if (error) {
-        throw error;
-      }
-
-      toast.success("Signed out successfully");
-      router.push("/login");
-    } catch (error) {
-      console.error("Error signing out:", error);
-      toast.error("Failed to sign out");
-    } finally {
-      setIsSigningOut(false);
     }
   };
 
@@ -163,14 +141,13 @@ const DashboardHeader = ({ user }) => {
             </Button>
 
             <Button
-              onClick={handleSignOut}
+              onClick={onSignOut}
               variant="outline"
               size="sm"
-              disabled={isSigningOut}
               className="flex items-center gap-2 text-red-600 hover:text-red-700 hover:bg-red-50"
             >
               <LogOut className="w-4 h-4" />
-              <span>{isSigningOut ? "Signing out..." : "Sign Out"}</span>
+              <span>Sign Out</span>
             </Button>
           </div>
 
@@ -215,13 +192,9 @@ const DashboardHeader = ({ user }) => {
                   Share Profile
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={handleSignOut}
-                  className="text-red-600"
-                  disabled={isSigningOut}
-                >
+                <DropdownMenuItem onClick={onSignOut} className="text-red-600">
                   <LogOut className="w-4 h-4 mr-2" />
-                  {isSigningOut ? "Signing out..." : "Sign Out"}
+                  Sign Out
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
