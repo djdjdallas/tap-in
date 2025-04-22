@@ -1,11 +1,12 @@
-// src/app/[username]/page.js - UPDATED
 "use client";
 
 import { useEffect, useState } from "react";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { notFound } from "next/navigation";
+import Image from "next/image";
+import { ClientOnlyComponent } from "@/components/ClientWrappers";
 
-// Import components
+// Import the fixed components
 import Profile from "@/components/Profile";
 import LinkContainer from "@/components/LinkContainer";
 
@@ -19,15 +20,9 @@ export default function ProfilePage({ params }) {
   const supabase = createClientComponentClient();
 
   useEffect(() => {
-    if (!username) {
-      notFound();
-      return;
-    }
-
     async function fetchProfileData() {
       try {
         setIsLoading(true);
-        setError(null);
 
         // First fetch the profile data
         const { data: profileData, error: profileError } = await supabase
@@ -44,11 +39,6 @@ export default function ProfilePage({ params }) {
             return;
           }
           throw profileError;
-        }
-
-        if (!profileData) {
-          notFound();
-          return;
         }
 
         setProfile(profileData);
@@ -83,48 +73,56 @@ export default function ProfilePage({ params }) {
     fetchProfileData();
   }, [username, supabase]);
 
-  // Return a loading state with the same structure as the final component
-  // to prevent hydration mismatches
+  // Handle loading state
   if (isLoading) {
     return (
-      <main className="min-h-screen bg-gradient-to-tr from-gray-50 via-gray-100 to-gray-50 py-16 px-6">
-        <div className="max-w-2xl mx-auto space-y-8">
-          <div className="text-center space-y-4">
-            <div className="relative w-32 h-32 mx-auto">
-              <div className="animate-pulse rounded-full h-32 w-32 bg-gray-200"></div>
-            </div>
-            <div className="animate-pulse h-8 w-48 bg-gray-200 rounded mx-auto"></div>
-            <div className="animate-pulse h-4 w-32 bg-gray-200 rounded mx-auto"></div>
-          </div>
-        </div>
-      </main>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-tr from-gray-50 via-gray-100 to-gray-50">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500" />
+      </div>
     );
   }
 
-  // If the profile doesn't exist, show the 404 page
-  if (!profile && !isLoading) {
+  // Handle error state
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-tr from-gray-50 via-gray-100 to-gray-50">
+        <div className="max-w-md p-6 bg-white rounded-lg shadow-md">
+          <h2 className="text-xl font-bold text-red-500 mb-2">Error</h2>
+          <p className="text-gray-700">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Handle not found (should be caught by the notFound() call, but just in case)
+  if (!profile) {
     return notFound();
   }
 
+  // Get avatar URL with fallback
+  const avatarUrl = profile.avatar_url || "/api/placeholder/128/128";
+
   return (
-    <main className="min-h-screen bg-gradient-to-tr from-gray-50 via-gray-100 to-gray-50 py-16 px-6">
-      <div className="max-w-2xl mx-auto space-y-8">
-        <Profile
-          name={profile.name}
-          title={profile.title}
-          avatarUrl={profile.avatar_url}
-          location={profile.location}
-          availability={profile.availability}
-          userId={profile.id}
-          isEditable={false}
-        />
-        <LinkContainer subtitles={subtitles} links={links} />
-        <div className="text-center text-sm text-gray-500">
-          <a href="https://tap-in.io" className="hover:text-gray-700">
-            ⚡️ Powered by tap-in.io
-          </a>
+    <ClientOnlyComponent>
+      <main className="min-h-screen bg-gradient-to-tr from-gray-50 via-gray-100 to-gray-50 py-16 px-6">
+        <div className="max-w-2xl mx-auto space-y-8">
+          <Profile
+            name={profile.name}
+            title={profile.title}
+            avatarUrl={avatarUrl}
+            location={profile.location}
+            availability={profile.availability}
+            userId={profile.id}
+            isEditable={false}
+          />
+          <LinkContainer subtitles={subtitles} links={links} />
+          <div className="text-center text-sm text-gray-500">
+            <a href="https://tap-in.io" className="hover:text-gray-700">
+              ⚡️ Powered by tap-in.io
+            </a>
+          </div>
         </div>
-      </div>
-    </main>
+      </main>
+    </ClientOnlyComponent>
   );
 }
