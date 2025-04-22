@@ -1,0 +1,7 @@
+{
+  "buildCommand": "next build",
+  "framework": "nextjs",
+  "devCommand": "next dev",
+  "installCommand": "npm install",
+  "regions": ["iad1"]
+}
